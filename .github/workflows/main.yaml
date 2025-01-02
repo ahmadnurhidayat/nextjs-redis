@@ -73,15 +73,20 @@ jobs:
         with:
           version: latest
 
+      # Run Trivy vulnerability scan and generate table output
+      - name: Run Trivy Vulnerability Scan (Table)
+        run: |
+          trivy image --severity CRITICAL,HIGH,MEDIUM,LOW --format table --exit-code 0 ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} | tee trivy-results-table.txt
+
       # Run Trivy Vulnerability Scanner on the Docker Image
       - name: Run Trivy Vulnerability Scanner
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          format: table,sarif
+          format: sarif
+          exit-code: 0
           severity: LOW,MEDIUM,HIGH,CRITICAL
-          output: trivy-results.sarif, trivy-results.txt
-          skip-setup-trivy: true
+          output: trivy-results.sarif
 
       - name: Upload SARIF to GitHub Security Tab
         uses: github/codeql-action/upload-sarif@v3
