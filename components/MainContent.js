@@ -26,7 +26,7 @@ export default function MainContent() {
       {repo && (
         <div className="mb-6 text-center">
           <div>
-            "{repo.login}" has {repo.public_repos} public repos
+            "{repo.login}" has {repo.public_repos} Public Repositories
           </div>
           <div className="text-gray-700">
             Took {time}ms (
