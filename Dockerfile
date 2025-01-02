@@ -9,7 +9,7 @@ RUN corepack enable && apk add --no-cache openssl
 FROM base AS deps
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
