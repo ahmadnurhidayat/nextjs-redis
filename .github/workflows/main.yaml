@@ -1,4 +1,4 @@
-name: Github Actions Workflows
+name: GitHub Actions Workflows
 
 on:
   release:
@@ -7,39 +7,9 @@ on:
 
 env:
   IMAGE_NAME: "ghcr.io/${{ github.repository }}"
-  IMAGE_TAG: "${{ github.event.release.tag_name }}"
   REDIS_OM_URL: ${{ secrets.REDIS_OM_URL }}
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  # scan-vulnerabilities:
-  #   name: Run Trivy vulnerability scanner
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-        
-  #     - name: Manual Trivy Setup
-  #       uses: aquasecurity/setup-trivy@v0.2.0
-  #       with:
-  #         cache: true
-  #         version: v0.57.1
-
-  #     - name: Run Trivy vulnerability scanner in repo mode
-  #       uses: aquasecurity/trivy-action@master
-  #       with:
-  #         scan-type: 'fs'
-  #         ignore-unfixed: true
-  #         format: 'sarif'
-  #         output: 'trivy-results.sarif'
-  #         severity: 'CRITICAL, HIGH, MEDIUM, LOW'
-  #         skip-setup-trivy: true
-
-  #     - name: Upload Trivy scan results to GitHub Security tab
-  #       uses: github/codeql-action/upload-sarif@v3
-  #       with:
-  #         sarif_file: 'trivy-results.sarif'
-
   build:
     name: Build and Push Docker Image
     runs-on: ubuntu-latest
@@ -48,60 +18,63 @@ jobs:
       packages: write
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Lowercase Repository Name
-      run: |
-        IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-        echo "IMAGE_NAME=${IMAGE_NAME_LOWER}" >> $GITHUB_ENV
+      - name: Normalize Repository Name
+        run: |
+          IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_NAME=${IMAGE_NAME_LOWER}" >> $GITHUB_ENV
 
-    - name: Determine Image Tag
-      run: |
-        if [ "release" = "release" ]; then
-          echo "IMAGE_TAG=${{ github.event.release.tag_name }}" >> $GITHUB_ENV
-        else
-          echo "IMAGE_TAG=latest" >> $GITHUB_ENV
-        fi
+      - name: Set Docker Image Tag
+        run: echo "IMAGE_TAG=${{ github.event.release.tag_name || 'latest' }}" >> $GITHUB_ENV
 
-    - name: Debug Environment Variables
-      run: |
-        echo "IMAGE_NAME: $IMAGE_NAME"
-        echo "IMAGE_TAG: $IMAGE_TAG"
+      - name: Debug Environment Variables
+        run: |
+          echo "IMAGE_NAME: $IMAGE_NAME"
+          echo "IMAGE_TAG: $IMAGE_TAG"
 
-    - name: Set up Docker Buildx 
-      uses: docker/setup-buildx-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-    - name: Login to GitHub Container Registry
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Build and push Docker image 
-      uses: docker/build-push-action@v6
-      with: 
-        context: . 
-        push: true
-        tags: |
-          ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          ${{ env.IMAGE_NAME }}:latest
-        cache-from: type=gha 
-        cache-to: type=gha,mode=max
-        build-args: |
-          REDIS_OM_URL=${{ secrets.REDIS_OM_URL }}
-          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Run Trivy vulnerability scanner
-      uses: aquasecurity/trivy-action@master
-      with:
-        image-ref: '${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}'
-        format: 'sarif'
-        output: 'trivy-results.sarif'
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            REDIS_OM_URL=${{ secrets.REDIS_OM_URL }}
 
-    - name: Upload Trivy scan results to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@v3
-      if: always()
-      with:
-        sarif_file: 'trivy-results.sarif'
+  scan:
+    name: Scan Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    needs: build
+
+    steps:
+      # Run Trivy vulnerability scan on the Docker image
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      # Upload SARIF scan results to GitHub Security tab
+      - name: Upload SARIF to GitHub Security Tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
